@@ -6,12 +6,10 @@
     libvirt_connector_address: http://192.168.121.1:5000
     virtual_machines:
       - name: node-alpha
-        uuid: "52668ec5-a4bd-4658-b978-9f32cc4cfd15"
         mac_address: "52:54:00:6a:58:9c"
         vcpus: 2
         memory: 4096
       - name: node-beta
-        uuid: "20c56994-2f71-4a8e-a2ca-925a1e9ed4c1"
         mac_address: "52:54:00:bd:4f:a1"
         vcpus: 2
         memory: 4096
