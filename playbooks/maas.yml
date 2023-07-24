@@ -1,0 +1,229 @@
+---
+- hosts: maas
+  become: yes
+  vars:
+    maas_ip_address: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
+    maas_region_controller_url: "http://{{ maas_ip_address }}:5240/MAAS"
+    maas_api_url: "http://{{maas_api_address }}/MAAS/api/2.0"
+    maas_db:
+      name: maasdb
+      user: maas
+      password: secretpassword
+    maas_admin:
+      username: admin
+      password: secretpassword 
+      email: admin@admin.com
+  tasks:
+
+    - name: Install requirements
+      apt:
+        name:
+          - jq
+        state: present
+
+    # Setup init
+    
+    - name: Retrieve server default IP
+      set_fact: 
+        maas_ip_address: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
+
+    - debug:
+        msg: " MAAS IP: {{ maas_ip_address }}"
+
+    # Install Podman and start postgres container
+    
+    - name: Install podman
+      apt:
+        update_cache: yes
+        name: podman
+        state: present
+
+    - name: Create the podman volume
+      containers.podman.podman_volume:
+        name: maas_postgres_data
+
+    - name: Start podman container
+      containers.podman.podman_container:
+        name: postgresql-maas
+        image: docker.io/library/postgres
+        state: started
+        recreate: false
+        env:
+          POSTGRES_USER: "{{ maas_db.user }}"
+          POSTGRES_PASSWORD: "{{ maas_db.password }}"
+          POSTGRES_DB: "{{ maas_db.name}}"
+        ports:
+          - "5432:5432"
+        volume:
+          - "maas_postgres_data:/var/lib/postgresql/data"
+    
+    # MAAS installation
+
+    - name: Ensure the MAAS configuration directory exists
+      file:
+        path: /etc/maas
+        state: directory
+
+    - name: Check if MAAS was installed
+      command: snap list maas
+      changed_when: false
+      failed_when: false
+      register: maas_install_check
+
+    - name: Install MAAS
+      command: snap install --channel=3.3 maas
+      when: maas_install_check.rc != 0
+        
+    # MAAS init
+
+    - name: Check if MAAS was initialized
+      stat:
+        path: /etc/maas/.init
+      register: maas_init_check
+
+    - name: Init MAAS
+      command: maas init region+rack --database "postgres://{{ maas_db.user }}:{{ maas_db.password }}@localhost/{{ maas_db.name }}" --maas-url "http://{{ maas_ip_address }}:5240/MAAS"
+      register: maas_init
+      when:
+        - not maas_init_check.stat.exists
+
+    - name: Mark MAAS as initialized
+      file:
+        path: /etc/maas/.init
+        state: touch
+      when:
+        - maas_init.changed
+
+    # MAAS admin account
+
+    - name: Check if MAAS admin account was created
+      stat:
+        path: "/etc/maas/.admin"
+      register: maas_admin_created_check
+
+    - name: Creating MAAS admin account
+      command: maas createadmin --username {{ maas_admin.username }} --password {{ maas_admin.password }} --email {{ maas_admin.email }}
+      register: maas_admin_created
+      when: not maas_admin_created_check.stat.exists
+
+    - name: Mark MAAS admin account as created
+      file:
+        path: /etc/maas/.admin
+        state: touch
+      when:
+        - maas_admin_created.changed
+
+    # API setup
+    
+    - name: Check if MAAS apikey was generated
+      stat:
+        path: /etc/maas/apikey.txt
+      register: maas_apikey_generated_check
+
+    - name: Generate MAAS apikey
+      command: maas apikey --generate --username admin
+      register: maas_apikey_output
+      when: not maas_apikey_generated_check.stat.exists
+
+    - name: Save MAAS apikey
+      copy:
+        dest: /etc/maas/apikey.txt
+        content: |
+          {{ maas_apikey_output.stdout }}
+      when: maas_apikey_output.changed
+
+    - name: Read MAAS apikey file
+      command: cat /etc/maas/apikey.txt
+      changed_when: false
+      register: maas_apikey_content
+
+    - debug:
+        msg: "MAAS API KEY: {{ maas_apikey_content }}"
+
+    - name: Define apikey var
+      set_fact:
+        api_key: "{{ maas_apikey_content.stdout }}"
+      when: maas_apikey_content is defined
+
+    # Login to MAAS admin cli
+    
+    - name: Login to MAAS admin cli
+      command: "maas login admin http://{{ ansible_ssh_host }}:5240/MAAS/ {{ api_key }}"
+      register: login_result
+      retries: 3
+      delay: 5
+      until: login_result.rc == 0
+      changed_when: false
+
+    # Initial configuration
+    
+    - name: Check if DNS forwarder value is set to 8.8.8.8
+      shell: maas admin maas get-config name=upstream_dns | grep 8.8.8.8
+      changed_when: false
+      failed_when: false
+      register: check_dns_forwarder_output
+
+    - name: Set DNS forwarder value to 8.8.8.8
+      command: maas admin maas set-config name=upstream_dns value=8.8.8.8
+      when: check_dns_forwarder_output.rc != 0
+
+    # Sync Ubuntu Jammy image
+    
+    - name: Check if Ubuntu Jammy image is already present
+      shell: maas admin boot-resources read | jq -r '[.[] | select(.name == "ubuntu/jammy")] | length == 0'
+      changed_when: false
+      failed_when: false
+      register: boot_resources_output
+
+    - name: Add Ubuntu Jammy image
+      command: maas admin boot-source-selections create 1 os=ubuntu release=jammy arches=amd64 subarches=* labels=*
+      when: boot_resources_output.stdout == "true"
+
+    - name: Import Ubuntu Jammy image
+      command: maas admin boot-resources import
+      when: boot_resources_output.stdout == "true"
+
+    # SSH setup
+
+    - name: Create an OpenSSH keypair with the default values (4096 bits, rsa)
+      openssh_keypair:
+        path: /etc/maas/id_rsa
+
+    - name: Read MAAS OpenSSH public key
+      command: cat /etc/maas/id_rsa.pub
+      changed_when: false
+      register: ssh_pub_file_content
+
+    - name: Set MAAS OpenSSH public key variable
+      set_fact:
+        ssh_pub_key: "{{ ssh_pub_file_content.stdout }}"
+
+    - name: Retrieve list of OpenSSH key from maas
+      shell: maas admin sshkeys read | jq -r '( first(.[] | .key) )'
+      changed_when: false
+      register: current_ssh_public_keys_output
+
+    - name: Upload OpenSSH public key to MAAS
+      command: "maas admin sshkeys create 'key={{ ssh_pub_key }}'"
+      when: ssh_pub_key not in current_ssh_public_keys_output.stdout_lines
+
+    # Enable DHCP on primary vlan
+    
+    - name: Check if Dynamic IP range exists 
+      shell: maas admin ipranges read | jq -r '.[] | select(.start_ip=="192.168.121.171") and select(.end_ip=="192.168.121.181")'
+      changed_when: false
+      register: dynamic_range_check
+    
+    - name: Create Dynamic IP range
+      command: "maas admin ipranges create type=dynamic start_ip=192.168.121.171 end_ip=192.168.121.181 subnet=1"
+      when: dynamic_range_check.stdout | length == 0
+
+    - name: Check if DHCP is turned on
+      shell: maas admin vlan read 0 0 | jq -r 'select(.dhcp_on == true)'
+      changed_when: false
+      register: dhcp_on_check
+
+    - name: Set Primary Rack Controller and turn on DHCP
+      command: maas admin vlan update 0 0 dhcp_on=true primary_rack=maas
+      when: dhcp_on_check.stdout | length == 0
+
