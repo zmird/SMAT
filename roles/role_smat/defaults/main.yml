@@ -1,0 +1,18 @@
+---
+libvirt_user: libvirt-qemu
+libvirt_group: libvirt-qemu
+
+maas_nodes: 2
+maas_nodes_attr:
+  memory: 4096
+  vcpus: 2
+maas_db:
+  name: maasdb
+  user: maas
+  password: secretpassword
+maas_admin:
+  username: admin
+  password: secretpassword
+  email: admin@admin.com
+
+role_smat_targets: []

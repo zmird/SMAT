@@ -1,0 +1,15 @@
+---
+
+- name: List nodes VMs
+  delegate_to: localhost
+  virt:
+    command: list_vms
+  register: libvirt_vms_list
+  changed_when: false
+
+- name: Destroy every node VMs
+  delegate_to: localhost
+  virt:
+    command: undefine
+    name: "{{ item }}"
+  loop: "{{ libvirt_vms_list.list_vms | select('search', '^node-') }}"

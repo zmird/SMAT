@@ -3,6 +3,28 @@ SMAT - Simple MAAS AuTomation
 
 Simple virtual laboratory to test automation written for MAAS.
 
+
+                               |
+                    eth0 +-----+
+                               |
+                               |   +------------------------------+
+    +----------------------+   |   |                              |
+    |                      |   |   |                  MAAS host   |
+    |   192.168.122.0/24   |   |   |  10.0.0.0/24     10.0.0.2    |
+    |   internal           |   |   |  internal                    | 
+    |                      |   |   |                  NODE-1 host |
+    |             MAAS     |   |   |                  10.0.0.10   |
+    |    192.168.122.2     |   +---+---+ virbr1                   |
+    |                      |   |   |     10.0.0.1     NODE-2 host |
+    |           virbr0 +---+---+   |                  10.0.0.11   |
+    |    192.168.122.1     |   |   |                              |
+    |                      |   |   |  libvirt DHCP off            |
+    |                      |   |   |  MAAS DHCP on                |
+    |  libvirt DHCP on     |   |   |                              |
+    |                      |   |   +------------------------------+
+    +----------------------+   |    
+                               |
+
 Dependencies
 ------------
 
@@ -25,76 +47,75 @@ To ensure your user has access to the libvirt daemon, add it as a member to the 
 sudo usermod -a -G libvirt <username>
 ```
 
-Install vagrant:
-
-```sh
-sudo pacman -S vagrant
-```
-
-Install the vagrant libvirt plugin:
-
-```sh
-vagrant plugin install vagrant-libvirt
-```
-
-Automation
-----------
-
-Playbooks:
-
-- *maas.yml*: Installs and setups MAAS
-
-- *libvirt.yml*: Creates the Virtual Machines and syncs them with MAAS
-
-- *juju.yml*: Installs juju
-
-Scripts:
-
-- *libvirt-connector.py*: Provides a simple webhook interface to libvirt
-
-- *env.sh*: Contains the environment variables needed
-
 Prepare the Lab
 ---------------
 
 Run the following command to prepare the lab environment
 
 ```sh
-make
+make all
 ```
 
-Activate the virtual environment:
-```sh
-source venv/bin/activate
-```
+Create the Lab
+--------------
 
-Load the environment variables:
+The necessary env vars needs to defined:
 
 ```sh
 source scripts/env.sh
 ```
 
-
-Create the Lab
---------------
-
-Run the following command to create the MAAS virtual machine:
+The following script can be used to create the lab
 
 ```sh
-vagrant up --provider=libvirt
+scripts/smat.sh --help
+Usage: scripts/smat.sh [-h] [-l list-targets] [-a all] [-u uninstall] [-s setup-host] [-m install-maas] [-c configure-maas] [-n install-nodes] [-j install-juju]
+
+Options:
+-h, --help                Show help
+-l, --list-targets        List all targets
+-a, --all                 Execute all install and configure targets
+-u, --uninstall           Execute the uninstall target
+-s, --setup-host          Execute the setup-host target
+-m, --install-maas        Execute the install-maas target
+-c, --configure-maas      Execute the configure-maas target
+-n, --install-nodes       Execute the install-nodes target
+-j, --install-juju        Execute the install-juju target
+    --uninstall-maas      Execute the uninstall-maas target
+    --uninstall-nodes     Execute the uninstall-nodes target
+    --uninstall-juju      Execute the uninstall-juju target
 ```
 
-Start the Libvirt webhook connector
+At some point during the nodes installation you will be asked to start the Libvirt webhook connector, to do it run:
 ```sh
 python scripts/libvirt-connector.py
 ```
 
-Run the playbook to create the libvirt virtual machines:
-```sh
-ansible-playbook -i $VAGRANT_ANSIBLE_INVENTORY playbooks/libvirt.yml
-```
+Automation
+----------
 
-Run the playbook to install juju
-```sh
-ansible-playbook -i $VAGRANT_ANSIBLE_INVENTORY playbooks/juju.yml
-```
+Roles:
+
+- *role_smat*: Contains the automation to install and configures MAAS and the virtual nodes 
+
+- *role_juju*: Contains the automation to installs and configures JuJu
+
+Playbooks:
+
+- *smat.yml*: Installs and configures MAAS and the virtual nodes
+
+- *juju.yml*: Installs and configures JuJu
+
+Scripts:
+
+- *smat.sh*: This script acts as an interface to the ansible automation, makes running it easier
+
+- *libvirt-connector.py*: Provides a simple webhook interface to libvirt
+
+- *env.sh*: Contains the environment variables needed
+
+Inventories:
+
+- *maas.py*: This ansible inventory only contains MAAS
+
+- *libvirt.py*: This ansible inventory contains all the libvirt hosts

@@ -1,0 +1,47 @@
+---
+- name: Install necessary packages
+  package:
+    name:
+      - guestfs-tools
+  when:
+    - ansible_distribution == "RedHat" or ansible_distribution == "Debian"
+
+- name: Install necessary packages
+  pacman:
+    name:
+      - guestfs-tools
+    state: present
+    update_cache: true
+  when:
+    - ansible_distribution == "Archlinux"
+
+- name: "Create data directories"
+  become: false
+  file:
+    path: "{{ repo_path }}/{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ data_dir }}"
+    - "{{ os_img_dir }}"
+    - "{{ libvirt_pool_dir }}"
+
+- name: Download Ubuntu 22.04 Server ISO image
+  become: false
+  get_url:
+    url: "{{ ubuntu_2204_img_url }}"
+    dest: "{{ ubuntu_2204_img_path }}"
+    checksum: "{{ ubuntu_2204_sha256sum }}"
+
+- name: Define libvirt networks
+  virt_net:
+    command: define
+    state: active
+    autostart: true
+    name: "{{ item.name }}"
+    xml: "{{ lookup('template', item.xml) }}"
+  loop:
+    - name: maas-internal
+      xml: net-internal.xml.j2
+    - name: maas-external
+      xml: net-external.xml.j2

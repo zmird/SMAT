@@ -1,0 +1,14 @@
+---
+- name: Install JUJU
+  hosts: maas
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Import role_juju
+      import_role:
+        name: role_juju
+      vars:
+        role_juju_targets:
+          - "install-juju"
+  tags:
+    - install-juju

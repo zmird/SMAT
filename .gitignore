@@ -2,3 +2,5 @@ collections/
 notes.txt
 .vagrant/
 **/__pycache__/**
+venv/
+data/

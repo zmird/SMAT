@@ -1,0 +1,7 @@
+---
+
+- name: Destroy every node VMs
+  delegate_to: localhost
+  virt:
+    command: undefine
+    name: maas

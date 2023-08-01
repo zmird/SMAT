@@ -4,7 +4,7 @@ from xml.etree import ElementTree as ET
 
 
 class LookupModule(LookupBase):
-    def get_vm_info(self, name):
+    def get_vm_info(self, name, network):
         domain = self.conn.lookupByName(name)
 
         info = domain.info()
@@ -18,7 +18,7 @@ class LookupModule(LookupBase):
 
         # Get IP addresses associated with the vm
         ips = []
-        leases = self.conn.networkLookupByName('vagrant-libvirt').DHCPLeases()
+        leases = self.conn.networkLookupByName(network).DHCPLeases()
         for lease in leases:
             if lease['mac'] == mac_address:
                 ips.append(lease['ipaddr'])
@@ -38,13 +38,18 @@ class LookupModule(LookupBase):
         self.conn = libvirt.open('qemu:///system')
 
         vms_list = kwargs.get('vms', [])
+        network_name = kwargs.get('network', None)
+
+        if network_name is None:
+            # raise error
+            pass
 
         if len(vms_list) == 0:
             # raise error
             pass
 
         if len(vms_list) == 1:
-            domain_info = self.get_vm_info(vms_list[0])
+            domain_info = self.get_vm_info(vms_list[0], network_name)
             return domain_info
 
         domains = self.conn.listAllDomains()
@@ -53,7 +58,7 @@ class LookupModule(LookupBase):
             if domain.name() not in vms_list:
                 continue
 
-            domain_info = self.get_vm_info(domain.name())
+            domain_info = self.get_vm_info(domain.name(), network_name)
             result.append(domain_info)
 
         return result

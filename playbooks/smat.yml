@@ -1,0 +1,93 @@
+---
+- name: Setup current host
+  hosts: localhost
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Import role_smat
+      import_role:
+        name: role_smat
+      vars:
+        role_smat_targets:
+          - "setup-host"
+  tags:
+    - install
+    - setup-host
+
+
+- name: Install MAAS
+  hosts: localhost
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Import role_smat
+      import_role:
+        name: role_smat
+      vars:
+        role_smat_targets:
+          - "install-maas"
+  tags:
+    - install
+    - install-maas
+
+- name: Configure MAAS
+  hosts: maas
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Import role_smat
+      import_role:
+        name: role_smat
+      vars:
+        role_smat_targets:
+          - "configure-maas"
+  tags:
+    - install
+    - configure-maas
+
+- name: Install Nodes
+  hosts: maas
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Import role_smat
+      import_role:
+        name: role_smat
+      vars:
+        role_smat_targets:
+          - "install-nodes"
+  tags:
+    - install
+    - install-nodes
+
+- name: Uninstall maas
+  hosts: localhost
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Import role_smat
+      import_role:
+        name: role_smat
+      vars:
+        role_smat_targets:
+          - "uninstall-nodes"
+  tags:
+    - uninstall
+    - uninstall-maas
+    - never
+
+- name: Uninstall Nodes
+  hosts: maas
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Import role_smat
+      import_role:
+        name: role_smat
+      vars:
+        role_smat_targets:
+          - "uninstall-nodes"
+  tags:
+    - uninstall
+    - uninstall-nodes
+    - never

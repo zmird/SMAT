@@ -1,0 +1,11 @@
+---
+
+- name: Include install.yml
+  include_tasks: install.yml
+  when:
+    - target_install in role_juju_targets
+
+- name: Include uninstall.yml
+  include_tasks: uninstall.yml
+  when:
+    - target_uninstall in role_juju_targets

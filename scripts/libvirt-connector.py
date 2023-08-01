@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
+import os
+import time
 from flask import Flask, jsonify
 import libvirt
 
 app = Flask(__name__)
 
 
-@app.route('/list', methods=['GET'])
+@app.route("/list", methods=["GET"])
 def list():
     conn = libvirt.open("qemu:///system")
     if not conn:
@@ -27,7 +29,7 @@ def list():
     return jsonify(all_domains)
 
 
-@app.route('/start/<name>', methods=['POST'])
+@app.route("/start/<name>", methods=["POST"])
 def start(name):
     conn = libvirt.open("qemu:///system")
     if not conn:
@@ -36,21 +38,34 @@ def start(name):
     domain = conn.lookupByName(name)
     if not domain.isActive():
         domain.create()
-    return f'Started VM {name}'
+    return f"Started VM {name}"
 
 
-@app.route('/stop/<name>', methods=['POST'])
+@app.route("/stop/<name>", methods=["POST"])
 def stop(name):
     conn = libvirt.open("qemu:///system")
     if not conn:
         raise SystemExit("Failed to open connection to qemu:///system")
 
     domain = conn.lookupByName(name)
-    domain.shutdown()
-    return f'Stopped VM {name}'
+
+    is_stopped = False
+    retries = 3
+
+    for _ in range(0, retries):
+        if domain.isActive():
+            domain.shutdown()
+            time.sleep(300/1000)  # sleep 300 milliseconds
+        else:
+            is_stopped = True
+            break
+
+    if not is_stopped:
+        domain.destroy()
+    return f"Stopped VM {name}"
 
 
-@app.route('/status/<name>', methods=['GET'])
+@app.route("/status/<name>", methods=["GET"])
 def status(name):
     conn = libvirt.open("qemu:///system")
     if not conn:
@@ -58,16 +73,16 @@ def status(name):
 
     domain = conn.lookupByName(name)
     if domain.isActive():
-        status = 'running'
+        status = "running"
     else:
-        status = 'stopped'
-    return jsonify({'status': status})
+        status = "stopped"
+    return jsonify({"status": status})
 
 
-@app.route('/ready', methods=['GET'])
+@app.route("/ready", methods=["GET"])
 def ready():
     return "OK"
 
 
-if __name__ == '__main__':
-    app.run(host="192.168.121.1", port=5000)
+if __name__ == "__main__":
+    app.run(host=os.getenv("HOST_IP"), port=5000)

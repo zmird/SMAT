@@ -1,0 +1,54 @@
+---
+- name: Copy base image into MAAS vdisk
+  delegate_to: localhost
+  copy:
+    src: "{{ ubuntu_2204_img_path }}"
+    dest: "{{ maas_disk_path }}"
+    owner: "{{ libvirt_user }}"
+    group: "{{ libvirt_group }}"
+    force: false
+    mode: "0666"
+  register: maas_disk_copy_result
+
+- name: Resize MAAS disk image
+  delegate_to: localhost
+  command: "qemu-img resize {{ maas_disk_path }} 25G"
+  when:
+    - maas_disk_copy_result is changed
+
+- name: Configure MAAS disk image
+  delegate_to: localhost
+  command: |
+    virt-customize -a {{ maas_disk_path }} \
+    --hostname {{ maas_hostname }}
+    --root-password  password:{{ maas_root_password }}
+    --ssh-inject 'root:file:{{ repo_path }}/roles/role_smat/files/maas-key.pub'
+    --firstboot "{{ repo_path }}/roles/role_smat/files/setup-maas.sh"
+    --uninstall cloud-init
+  when:
+    - maas_disk_copy_result is changed
+
+- name: Define MAAS vm
+  delegate_to: localhost
+  virt:
+    command: define
+    xml: "{{ lookup('template', 'maas.xml.j2') }}"
+  vars:
+    maas_vm_name: "{{ maas_hostname }}"
+    maas_vm_ram_mb: "{{ maas_ram }}"
+    maas_vm_vcpus: "{{ maas_vcpus }}"
+    maas_vm_disk_path: "{{ maas_disk_path }}"
+
+- name: Start MAAS vm
+  delegate_to: localhost
+  virt:
+    name: "{{ maas_hostname }}"
+    state: "running"
+  register: maas_vm_start_result
+  until: maas_vm_start_result is success
+  retries: 15
+  delay: 2
+
+- name: Wait for MAAS vm to start correctly
+  pause:
+    seconds: 30

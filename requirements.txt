@@ -2,3 +2,4 @@ libvirt-python
 flask
 ansible
 ansible-lint
+lxml

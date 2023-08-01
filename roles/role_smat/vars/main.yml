@@ -1,0 +1,34 @@
+---
+data_dir: data
+os_img_dir: "{{ data_dir }}/img"
+libvirt_pool_dir: "{{ data_dir }}/pool"
+
+# Ubuntu Image
+ubuntu_2204_img_url: https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img
+ubuntu_2204_sha256sum: sha256:d5b419272e01cd69bfc15cbbbc5700d2196242478a54b9f19746da3a1269b7c8
+ubuntu_2204_img_filename: "ubuntu-22.04-cloud-init.img"
+
+# MAAS vm
+maas_hostname: maas
+maas_root_password: maas
+maas_ram: 4096
+maas_vcpus: 2
+maas_disk_path: "/var/lib/libvirt/images/maas.qcow2"
+maas_ip_address: "{{ lookup('env', 'MAAS_EXTERNAL_IP') }}"
+maas_region_controller_url: "http://{{ maas_ip_address }}:5240/MAAS"
+maas_api_url: "http://{{ maas_api_address }}/MAAS/api/2.0"
+
+# MAAS nodes
+maas_nodes_image: ubuntu22.04
+
+# Libvirt
+libvirt_connector_address: "http://{{ lookup('env', 'HOST_IP') }}:5000"
+libvirt_nodes_network: maas-internal
+
+# Role targets
+target_setup_host: "setup-host"
+target_install_maas: "install-maas"
+target_configure_maas: "configure-maas"
+target_install_nodes: "install-nodes"
+target_uninstall_maas: "uninstall-maas"
+target_uninstall_nodes: "uninstall-nodes"

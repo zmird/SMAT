@@ -1,0 +1,34 @@
+---
+
+- name: Include facts.yml
+  include_tasks: facts.yml
+
+- name: Include setup-host.yml
+  include_tasks: setup-host.yml
+  when:
+    - target_setup_host in role_smat_targets
+
+- name: Include install-maas.yml
+  include_tasks: install-maas.yml
+  when:
+    - target_install_maas in role_smat_targets
+
+- name: Include configure-maas.yml
+  include_tasks: configure-maas.yml
+  when:
+    - target_configure_maas in role_smat_targets
+
+- name: Include install-nodes.yml
+  include_tasks: install-nodes.yml
+  when:
+    - target_install_nodes in role_smat_targets
+
+- name: Include uninstall-maas.yml
+  include_tasks: uninstall-maas.yml
+  when:
+    - target_uninstall_maas in role_smat_targets
+
+- name: Include uninstall-nodes.yml
+  include_tasks: uninstall-nodes.yml
+  when:
+    - target_uninstall_nodes in role_smat_targets

@@ -1,0 +1,75 @@
+---
+
+- name: "Create user {{ juju_user }}"
+  getent:
+    database: passwd
+    key: "{{ juju_user }}"
+  register: getent_user_result
+
+- name: Create juju directory
+  file:
+    path: "{{ juju_home }}/.local/share/juju"
+    state: directory
+    owner: "{{ juju_user }}"
+    group: "{{ juju_user }}"
+    mode: "0750"
+
+- name: Retrieve MAAS Api Key
+  command: cat /etc/maas/apikey.txt
+  changed_when: false
+  register: command_maas_apikey_result
+  when:
+    - maas_api_key is not defined
+
+- name: Set MAAS Api key fact
+  set_fact:
+    maas_api_key: "{{ command_maas_apikey_result.stdout }}"
+  when:
+    - maas_api_key is not defined
+
+- name: Create juju credentials
+  template:
+    src: credentials.yaml.j2
+    dest: "{{ juju_home }}/credentials.yaml"
+    owner: "{{ juju_user }}"
+    group: "{{ juju_user }}"
+    mode: "0600"
+
+- name: Create maas cloud config
+  template:
+    src: maas-cloud.yaml.j2
+    dest: "{{ juju_home }}/maas-cloud.yaml"
+    owner: "{{ juju_user }}"
+    group: "{{ juju_user }}"
+    mode: "0600"
+
+- name: Check if maas cloud is present
+  command: "grep maas {{ juju_home }}/.local/share/juju/clouds.yaml"
+  changed_when: false
+  register: check_maas_cloud_result
+
+- name: Add maas cloud to juju
+  command: |
+    juju add-cloud \
+    --client
+    -f {{ juju_home }}/maas-cloud.yaml
+    maas-cloud
+  when:
+    - check_maas_cloud_result.rc != 0
+
+- name: Check if maas credentials are present
+  command: "grep maas {{ juju_home }}/.local/share/juju/credentials.yaml"
+  changed_when: false
+  register: check_maas_credentials_result
+
+- name: Add maas credentials to juju
+  command: |
+    juju add-credential \
+    --client
+    -f {{ juju_home }}/credentials.yaml
+    maas-cloud
+  when:
+    - check_maas_credentials_result.rc != 0
+
+- name: Bootstrap juju
+  command: juju bootstrap maas-cloud

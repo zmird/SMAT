@@ -1,0 +1,8 @@
+---
+juju_user: juju
+juju_home: "/home/{{ juju_user }}"
+
+maas_ip: 192.168.122.2
+maas_port: 5240
+
+role_juju_targets: []

@@ -1,0 +1,16 @@
+---
+
+- name: Get git root directory
+  delegate_to: localhost
+  become: false
+  command: git rev-parse --show-toplevel
+  changed_when: false
+  register: git_repo_path
+
+- name: Set current repo path
+  set_fact:
+    repo_path: "{{ git_repo_path.stdout }}"
+
+- name: Set Ubuntu 22.04 Server ISO image path
+  set_fact:
+    ubuntu_2204_img_path: "{{ repo_path }}/{{ os_img_dir }}/{{ ubuntu_2204_img_filename }}"

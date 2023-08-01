@@ -1,0 +1,3 @@
+---
+target_install: "install"
+target_uninstall: "uninstall"

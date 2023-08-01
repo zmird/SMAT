@@ -1,0 +1,98 @@
+---
+- name: Libvirt | List VMs
+  delegate_to: localhost
+  virt:
+    command: list_vms
+  register: libvirt_vms_list
+  changed_when: false
+
+- name: Libvirt | Create VMs
+  delegate_to: localhost
+  command: |
+    virt-install \
+      --pxe
+      --boot network
+      --network network={{ libvirt_nodes_network }}
+      --os-variant {{ maas_nodes_image }}
+      --name {{ node_name }}
+      --memory {{ maas_nodes_attr.memory }}
+      --vcpus {{ maas_nodes_attr.vcpus }}
+      --wait 0
+  loop: "{{ range(0, maas_nodes) | list }}"
+  vars:
+    node_name: "node-{{ item }}"
+  changed_when: true
+  when: node_name is not in libvirt_vms_list.list_vms
+
+- name: Libvirt | List VMs
+  delegate_to: localhost
+  virt:
+    command: list_vms
+  register: libvirt_vms_list
+  changed_when: false
+
+- name: Libvirt | Retrieve VMs infos
+  delegate_to: localhost
+  set_fact:
+    libvirt_info_vms: "{{ lookup('libvirt_lookup', vms=vms_list, network=libvirt_nodes_network) }}"
+  vars:
+    vms_list: "{{ libvirt_vms_list.list_vms | reject('equalto', 'maas') | list }}"
+
+- name: MAAS | Retrieve machines list
+  shell: "maas admin machines read | jq -r '[.[] | {system_id: .system_id, mac_addresses: .interface_set[].mac_address}]'"
+  changed_when: false
+  register: maas_machines_command
+  until: maas_machines_command.stdout != "[]"
+  retries: 48
+  delay: 10
+
+- name: MAAS | Set machines infos fact
+  set_fact:
+    maas_info_vms: "{{ maas_machines_command.stdout | from_json }}"
+
+- name: MAAS | Match MAAS machines with Libvirt machines
+  delegate_to: localhost
+  set_fact:
+    info_vms: "{{ info_vms|default([]) + [{ 'libvirt_name': item.0.name, 'maas_id': item.1.system_id }] }}"
+  when: item.0['mac_address'] == item.1['mac_addresses']
+  with_together:
+    - "{{ libvirt_info_vms | sort(attribute='mac_address') }}"
+    - "{{ maas_info_vms | sort(attribute='mac_addresses') }}"
+
+- name: Print match list
+  debug:
+    var: info_vms
+
+- name: Libvirt | Waiting for connector to be ready, please run "scripts/libvirt-connector.py"
+  uri:
+    url: "{{ libvirt_connector_address }}/ready"
+    return_content: true
+    validate_certs: false
+    status_code:
+      - 200
+  register: libvirt_connector_output
+  until: libvirt_connector_output.status == 200
+  retries: 24
+  delay: 5
+
+- name: MAAS | Retrieve current power parameters
+  shell: maas admin machines power-parameters | jq
+  changed_when: false
+  register: maas_power_parameters_command
+
+- name: MAAS | Update power configuration
+  command: "maas admin machine update {{ item.maas_id }} power_type=webhook power_parameters='{{ updated_power_params | to_json }}'"
+  loop: "{{ info_vms }}"
+  vars:
+    current_power_params: "{{ (maas_power_parameters_command.stdout | from_json)[item.maas_id] }}"
+    updated_power_params:
+      power_on_uri: "{{ libvirt_connector_address }}/start/{{ item.libvirt_name }}"
+      power_off_uri: "{{ libvirt_connector_address }}/stop/{{ item.libvirt_name }}"
+      power_query_uri: "{{ libvirt_connector_address }}/status/{{ item.libvirt_name }}"
+  # when: >
+  #   power_on_uri is not in updated_power_params or
+  #   power_off_uri is not in updated_power_params or
+  #   power_query_uri is not in updated_power_params or
+  #   current_power_params.power_on_uri != updated_power_params.power_on_uri or
+  #   current_power_params.power_off_uri != updated_power_params.power_off_uri or
+  #   current_power_params.power_query_uri != updated_power_params.power_query_uri
