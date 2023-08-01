@@ -11,7 +11,7 @@ Simple virtual laboratory to test automation written for MAAS.
     +----------------------+   |   |                              |
     |                      |   |   |                  MAAS host   |
     |   192.168.122.0/24   |   |   |  10.0.0.0/24     10.0.0.2    |
-    |   internal           |   |   |  internal                    | 
+    |   external           |   |   |  internal                    | 
     |                      |   |   |                  NODE-1 host |
     |             MAAS     |   |   |                  10.0.0.10   |
     |    192.168.122.2     |   +---+---+ virbr1                   |
